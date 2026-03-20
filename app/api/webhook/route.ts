@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const preferenceId = payment.preference_id;
+  const preferenceId = (payment as any).preference_id;
 
   // Verificar que no fue procesado antes
   const { data: compraExistente } = await supabase
