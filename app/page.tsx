@@ -120,8 +120,8 @@ export default function HomePage() {
 
           <button type="button" onClick={handleComprar} disabled={loading}
             className="w-full mt-2 px-8 py-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-2xl font-bold text-lg transition disabled:opacity-60">
-            {loading ? "Procesando..." : cantidad === 1 ? "Pagar $2.000 con Mercado Pago"
-              : cantidad === 3 ? "Pagar $5.000 con Mercado Pago" : "Pagar con Mercado Pago"}
+            {loading ? "Procesando..." : cantidad === 1 ? "Pagar $2.000 con Flow"
+  : cantidad === 3 ? "Pagar $5.000 con Flow" : "Pagar con Flow"}
           </button>
         </div>
       </section>

@@ -56,4 +56,5 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({ url: `${data.url}?token=${data.token}` });
+  console.log("Flow response:", data);
 }
