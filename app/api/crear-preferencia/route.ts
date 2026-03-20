@@ -1,46 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MercadoPagoConfig, Preference } from "mercadopago";
+import { createHmac } from "crypto";
 import { supabase } from "@/lib/supabase";
 
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN!,
-});
+const FLOW_API_URL = "https://www.flow.cl/api";
+const API_KEY = process.env.FLOW_API_KEY!;
+const SECRET_KEY = process.env.FLOW_SECRET_KEY!;
+
+function signParams(params: Record<string, string>): string {
+  const keys = Object.keys(params).sort();
+  const toSign = keys.map((k) => k + params[k]).join("");
+  return createHmac("sha256", SECRET_KEY).update(toSign).digest("hex");
+}
 
 export async function POST(req: NextRequest) {
   const { nombre, email, telefono, cantidad } = await req.json();
 
   const precio = cantidad === 1 ? 2000 : 5000;
+  const commerceOrder = `rifa-${Date.now()}`;
 
-  const preference = await new Preference(client).create({
-    body: {
-      items: [
-        {
-          id: "rifa-consuelo",
-          title: `Rifa Consuelo - ${cantidad} número${cantidad > 1 ? "s" : ""}`,
-          quantity: 1,
-          unit_price: precio,
-          currency_id: "CLP",
-        },
-      ],
-      payer: {
-        name: nombre,
-        email: email,
-        phone: { number: telefono },
-      },
-      back_urls: {
-        success: `${process.env.NEXT_PUBLIC_URL}/gracias`,
-        failure: `${process.env.NEXT_PUBLIC_URL}/error`,
-        pending: `${process.env.NEXT_PUBLIC_URL}/pendiente`,
-      },
-      auto_return: "approved",
-      notification_url: `${process.env.NEXT_PUBLIC_URL}/api/webhook`,
-      metadata: { nombre, email, telefono, cantidad },
-    },
+  const params: Record<string, string> = {
+    apiKey: API_KEY,
+    commerceOrder,
+    subject: `Rifa Consuelo - ${cantidad} número${cantidad > 1 ? "s" : ""}`,
+    currency: "CLP",
+    amount: String(precio),
+    email,
+    urlConfirmation: `${process.env.NEXT_PUBLIC_URL}/api/webhook`,
+    urlReturn: `${process.env.NEXT_PUBLIC_URL}/gracias`,
+  };
+
+  params.s = signParams(params);
+
+  const body = new URLSearchParams(params);
+
+  const res = await fetch(`${FLOW_API_URL}/payment/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
   });
+
+  const data = await res.json();
+
+  if (!data.url || !data.token) {
+    return NextResponse.json({ error: "Error al crear pago" }, { status: 500 });
+  }
 
   // Guardar compra pendiente
   await supabase.from("compras").insert({
-    preference_id: preference.id,
+    preference_id: commerceOrder,
     nombre,
     email,
     telefono,
@@ -48,5 +55,5 @@ export async function POST(req: NextRequest) {
     estado: "pendiente",
   });
 
-  return NextResponse.json({ url: preference.init_point });
+  return NextResponse.json({ url: `${data.url}?token=${data.token}` });
 }

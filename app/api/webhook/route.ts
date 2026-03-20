@@ -1,52 +1,62 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MercadoPagoConfig, Payment } from "mercadopago";
+import { createHmac } from "crypto";
 import { supabase } from "@/lib/supabase";
 import { Resend } from "resend";
 
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN!,
-});
-
+const FLOW_API_URL = "https://www.flow.cl/api";
+const API_KEY = process.env.FLOW_API_KEY!;
+const SECRET_KEY = process.env.FLOW_SECRET_KEY!;
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
+function signParams(params: Record<string, string>): string {
+  const keys = Object.keys(params).sort();
+  const toSign = keys.map((k) => k + params[k]).join("");
+  return createHmac("sha256", SECRET_KEY).update(toSign).digest("hex");
+}
+
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const body = await req.formData();
+  const token = body.get("token") as string;
 
-  if (body.type !== "payment") {
+  if (!token) return NextResponse.json({ ok: true });
+
+  const params: Record<string, string> = {
+    apiKey: API_KEY,
+    token,
+  };
+  params.s = signParams(params);
+
+  const res = await fetch(`${FLOW_API_URL}/payment/getStatus`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(params).toString(),
+  });
+
+  const payment = await res.json();
+
+  if (payment.status !== 2) {
     return NextResponse.json({ ok: true });
   }
 
-  const paymentId = body.data?.id;
-  if (!paymentId) return NextResponse.json({ ok: true });
+  const commerceOrder = payment.commerceOrder;
 
-  const payment = await new Payment(client).get({ id: paymentId });
-
-  if (payment.status !== "approved") {
-    return NextResponse.json({ ok: true });
-  }
-
-  const preferenceId = (payment as any).preference_id;
-
-  // Verificar que no fue procesado antes
   const { data: compraExistente } = await supabase
     .from("compras")
     .select("*")
-    .eq("preference_id", preferenceId)
+    .eq("preference_id", commerceOrder)
     .eq("estado", "completado")
     .single();
 
   if (compraExistente) return NextResponse.json({ ok: true });
 
-  // Obtener datos de la compra
   const { data: compra } = await supabase
     .from("compras")
     .select("*")
-    .eq("preference_id", preferenceId)
+    .eq("preference_id", commerceOrder)
     .single();
 
   if (!compra) return NextResponse.json({ ok: true });
 
-  // Obtener números disponibles
   const { data: numerosDisponibles } = await supabase
     .from("numeros")
     .select("id")
@@ -56,11 +66,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No hay números disponibles" }, { status: 400 });
   }
 
-  // Elegir números aleatorios
   const shuffled = numerosDisponibles.sort(() => Math.random() - 0.5);
   const elegidos = shuffled.slice(0, compra.cantidad).map((n) => n.id);
 
-  // Marcar como vendidos
   await supabase
     .from("numeros")
     .update({
@@ -72,17 +80,15 @@ export async function POST(req: NextRequest) {
     })
     .in("id", elegidos);
 
-  // Actualizar compra
   await supabase
     .from("compras")
     .update({
       estado: "completado",
-      payment_id: String(paymentId),
+      payment_id: String(payment.flowOrder),
       numeros_asignados: elegidos,
     })
-    .eq("preference_id", preferenceId);
+    .eq("preference_id", commerceOrder);
 
-  // Enviar correo
   const numerosFormateados = elegidos
     .map((n) => String(n).padStart(3, "0"))
     .join(", ");
