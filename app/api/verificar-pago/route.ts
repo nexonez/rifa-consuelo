@@ -3,7 +3,7 @@ import { createHmac } from "crypto";
 import { supabase } from "@/lib/supabase";
 import { Resend } from "resend";
 
-const FLOW_API_URL = "https://sandbox.flow.cl/api";
+const FLOW_API_URL = "https://www.flow.cl/api";
 const API_KEY = process.env.FLOW_API_KEY!;
 const SECRET_KEY = process.env.FLOW_SECRET_KEY!;
 const resend = new Resend(process.env.RESEND_API_KEY!);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { supabase } from "@/lib/supabase";
 
-const FLOW_API_URL = "https://sandbox.flow.cl/api";
+const FLOW_API_URL = "https://www.flow.cl/api";
 const API_KEY = process.env.FLOW_API_KEY!;
 const SECRET_KEY = process.env.FLOW_SECRET_KEY!;
 
