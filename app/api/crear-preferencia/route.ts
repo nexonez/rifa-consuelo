@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       currency: "CLP",
       amount: String(precio),
       email,
-      urlConfirmation: `${process.env.NEXT_PUBLIC_URL}/api/webhook`,
+      urlConfirmation: `${process.env.NEXT_PUBLIC_URL}/api/retorno`,
       urlReturn: `${process.env.NEXT_PUBLIC_URL}/api/retorno`,
     };
 

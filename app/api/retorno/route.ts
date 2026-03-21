@@ -8,3 +8,11 @@ export async function POST(req: NextRequest) {
     `${process.env.NEXT_PUBLIC_URL}/gracias?token=${token}`
   );
 }
+
+export async function GET(req: NextRequest) {
+  const token = req.nextUrl.searchParams.get("token");
+  
+  return NextResponse.redirect(
+    `${process.env.NEXT_PUBLIC_URL}/gracias?token=${token}`
+  );
+}
