@@ -3,7 +3,6 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { createHmac } from "crypto";
 
 function GraciasContent() {
   const searchParams = useSearchParams();
@@ -18,12 +17,20 @@ function GraciasContent() {
     }
 
     const buscar = async () => {
-      // Consultar estado del pago a Flow y asignar números
-      const res = await fetch(`/api/verificar-pago?token=${token}`);
-      const data = await res.json();
+      // Buscar la compra por payment_id (token de Flow)
+      for (let i = 0; i < 15; i++) {
+        const { data } = await supabase
+          .from("compras")
+          .select("numeros_asignados, estado")
+          .eq("payment_id", token)
+          .single();
 
-      if (data.numeros?.length > 0) {
-        setNumeros(data.numeros);
+        if (data?.estado === "completado" && data?.numeros_asignados?.length > 0) {
+          setNumeros(data.numeros_asignados);
+          setLoading(false);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 2000));
       }
       setLoading(false);
     };

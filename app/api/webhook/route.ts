@@ -20,10 +20,7 @@ export async function POST(req: NextRequest) {
 
   if (!token) return NextResponse.json({ ok: true });
 
-  const params: Record<string, string> = {
-    apiKey: API_KEY,
-    token,
-  };
+  const params: Record<string, string> = { apiKey: API_KEY, token };
   params.s = signParams(params);
 
   const res = await fetch(`${FLOW_API_URL}/payment/getStatus`, {
@@ -33,10 +30,9 @@ export async function POST(req: NextRequest) {
   });
 
   const payment = await res.json();
+  console.log("Webhook payment status:", JSON.stringify(payment));
 
-  if (payment.status !== 2) {
-    return NextResponse.json({ ok: true });
-  }
+  if (payment.status !== 2) return NextResponse.json({ ok: true });
 
   const commerceOrder = payment.commerceOrder;
 
@@ -84,7 +80,7 @@ export async function POST(req: NextRequest) {
     .from("compras")
     .update({
       estado: "completado",
-      payment_id: String(payment.flowOrder),
+      payment_id: token,
       numeros_asignados: elegidos,
     })
     .eq("preference_id", commerceOrder);
@@ -112,3 +108,4 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
