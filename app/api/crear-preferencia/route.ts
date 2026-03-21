@@ -23,7 +23,6 @@ export async function POST(req: NextRequest) {
       apiKey: API_KEY,
       commerceOrder,
       subject: `Rifa Consuelo - ${cantidad} numero${cantidad > 1 ? "s" : ""}`,
-      currency: "CLP",
       amount: String(precio),
       email,
       urlConfirmation: `${process.env.NEXT_PUBLIC_URL}/api/retorno`,

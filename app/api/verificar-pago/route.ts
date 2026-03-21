@@ -3,7 +3,7 @@ import { createHmac } from "crypto";
 import { supabase } from "@/lib/supabase";
 import { Resend } from "resend";
 
-const FLOW_API_URL = "https://sandbox.flow.cl/api";
+const FLOW_API_URL = "https://www.flow.cl/api";
 const API_KEY = process.env.FLOW_API_KEY!;
 const SECRET_KEY = process.env.FLOW_SECRET_KEY!;
 const resend = new Resend(process.env.RESEND_API_KEY!);
@@ -36,7 +36,6 @@ export async function GET(req: NextRequest) {
 
   const commerceOrder = payment.commerceOrder;
 
-  // Verificar si ya fue procesado
   const { data: compraExistente } = await supabase
     .from("compras")
     .select("*")
@@ -48,7 +47,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ numeros: compraExistente.numeros_asignados });
   }
 
-  // Obtener compra pendiente
   const { data: compra } = await supabase
     .from("compras")
     .select("*")
@@ -57,7 +55,6 @@ export async function GET(req: NextRequest) {
 
   if (!compra) return NextResponse.json({ numeros: [] });
 
-  // Obtener números disponibles
   const { data: numerosDisponibles } = await supabase
     .from("numeros")
     .select("id")
@@ -67,11 +64,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ numeros: [] });
   }
 
-  // Elegir números aleatorios
   const shuffled = numerosDisponibles.sort(() => Math.random() - 0.5);
   const elegidos = shuffled.slice(0, compra.cantidad).map((n) => n.id);
 
-  // Marcar como vendidos
   await supabase
     .from("numeros")
     .update({
@@ -83,7 +78,6 @@ export async function GET(req: NextRequest) {
     })
     .in("id", elegidos);
 
-  // Actualizar compra
   await supabase
     .from("compras")
     .update({
@@ -93,7 +87,6 @@ export async function GET(req: NextRequest) {
     })
     .eq("preference_id", commerceOrder);
 
-  // Enviar correo
   const numerosFormateados = elegidos
     .map((n) => String(n).padStart(3, "0"))
     .join(", ");
