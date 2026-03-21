@@ -3,39 +3,33 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { createHmac } from "crypto";
 
 function GraciasContent() {
   const searchParams = useSearchParams();
-  const preferenceId = searchParams.get("preference_id");
+  const token = searchParams.get("token");
   const [numeros, setNumeros] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!preferenceId) {
+    if (!token) {
       setLoading(false);
       return;
     }
 
     const buscar = async () => {
-      for (let i = 0; i < 10; i++) {
-        const { data } = await supabase
-          .from("compras")
-          .select("numeros_asignados, estado")
-          .eq("preference_id", preferenceId)
-          .single();
+      // Consultar estado del pago a Flow y asignar números
+      const res = await fetch(`/api/verificar-pago?token=${token}`);
+      const data = await res.json();
 
-        if (data?.estado === "completado" && data?.numeros_asignados?.length > 0) {
-          setNumeros(data.numeros_asignados);
-          setLoading(false);
-          return;
-        }
-        await new Promise((r) => setTimeout(r, 2000));
+      if (data.numeros?.length > 0) {
+        setNumeros(data.numeros);
       }
       setLoading(false);
     };
 
     buscar();
-  }, [preferenceId]);
+  }, [token]);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-rose-50 to-white flex items-center justify-center px-4">
