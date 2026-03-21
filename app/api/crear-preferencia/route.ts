@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       amount: String(precio),
       email,
       urlConfirmation: `${process.env.NEXT_PUBLIC_URL}/api/webhook`,
-      urlReturn: `${process.env.NEXT_PUBLIC_URL}/gracias`,
+      urlReturn: `${process.env.NEXT_PUBLIC_URL}/api/retorno`,
     };
 
     params.s = signParams(params);
