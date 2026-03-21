@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   if (!token) return NextResponse.json({ error: "No token" }, { status: 400 });
 
+  // Primero intentar con token
   const params: Record<string, string> = { apiKey: API_KEY, token };
   params.s = signParams(params);
 
@@ -28,32 +29,66 @@ export async function GET(req: NextRequest) {
   });
 
   const payment = await res.json();
-  console.log("Payment status:", JSON.stringify(payment));
+  console.log("Payment status by token:", JSON.stringify(payment));
 
-  if (payment.status !== 2) {
-    return NextResponse.json({ numeros: [] });
+  // Si falla, buscar por commerceOrder en Supabase y usar getStatusByCommerceId
+  if (payment.code === 105 || payment.status === undefined) {
+    // Buscar la compra más reciente pendiente
+    const { data: compra } = await supabase
+      .from("compras")
+      .select("*")
+      .eq("estado", "pendiente")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!compra) return NextResponse.json({ numeros: [] });
+
+    const params2: Record<string, string> = {
+      apiKey: API_KEY,
+      commerceId: compra.preference_id,
+    };
+    params2.s = signParams(params2);
+
+    const res2 = await fetch(`${FLOW_API_URL}/payment/getStatusByCommerceId`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(params2).toString(),
+    });
+
+    const payment2 = await res2.json();
+    console.log("Payment status by commerceId:", JSON.stringify(payment2));
+
+    if (payment2.status !== 2) return NextResponse.json({ numeros: [] });
+
+    return await procesarPago(payment2, compra);
   }
 
-  const commerceOrder = payment.commerceOrder;
+  if (payment.status !== 2) return NextResponse.json({ numeros: [] });
 
+  const { data: compra } = await supabase
+    .from("compras")
+    .select("*")
+    .eq("preference_id", payment.commerceOrder)
+    .single();
+
+  if (!compra) return NextResponse.json({ numeros: [] });
+
+  return await procesarPago(payment, compra);
+}
+
+async function procesarPago(payment: any, compra: any) {
+  // Verificar si ya fue procesado
   const { data: compraExistente } = await supabase
     .from("compras")
     .select("*")
-    .eq("preference_id", commerceOrder)
+    .eq("preference_id", compra.preference_id)
     .eq("estado", "completado")
     .single();
 
   if (compraExistente?.numeros_asignados) {
     return NextResponse.json({ numeros: compraExistente.numeros_asignados });
   }
-
-  const { data: compra } = await supabase
-    .from("compras")
-    .select("*")
-    .eq("preference_id", commerceOrder)
-    .single();
-
-  if (!compra) return NextResponse.json({ numeros: [] });
 
   const { data: numerosDisponibles } = await supabase
     .from("numeros")
@@ -65,7 +100,7 @@ export async function GET(req: NextRequest) {
   }
 
   const shuffled = numerosDisponibles.sort(() => Math.random() - 0.5);
-  const elegidos = shuffled.slice(0, compra.cantidad).map((n) => n.id);
+  const elegidos = shuffled.slice(0, compra.cantidad).map((n: any) => n.id);
 
   await supabase
     .from("numeros")
@@ -85,10 +120,10 @@ export async function GET(req: NextRequest) {
       payment_id: String(payment.flowOrder),
       numeros_asignados: elegidos,
     })
-    .eq("preference_id", commerceOrder);
+    .eq("preference_id", compra.preference_id);
 
   const numerosFormateados = elegidos
-    .map((n) => String(n).padStart(3, "0"))
+    .map((n: number) => String(n).padStart(3, "0"))
     .join(", ");
 
   await resend.emails.send({
