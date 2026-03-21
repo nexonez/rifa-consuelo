@@ -13,48 +13,61 @@ function signParams(params: Record<string, string>): string {
 }
 
 export async function POST(req: NextRequest) {
-  const { nombre, email, telefono, cantidad } = await req.json();
+  try {
+    const { nombre, email, telefono, cantidad } = await req.json();
 
-  const precio = cantidad === 1 ? 2000 : 5000;
-  const commerceOrder = `rifa-${Date.now()}`;
+    const precio = cantidad === 1 ? 2000 : 5000;
+    const commerceOrder = `rifa-${Date.now()}`;
 
-  const params: Record<string, string> = {
-    apiKey: API_KEY,
-    commerceOrder,
-    subject: `Rifa Consuelo - ${cantidad} número${cantidad > 1 ? "s" : ""}`,
-    currency: "CLP",
-    amount: String(precio),
-    email,
-    urlConfirmation: `${process.env.NEXT_PUBLIC_URL}/api/webhook`,
-    urlReturn: `${process.env.NEXT_PUBLIC_URL}/gracias`,
-  };
+    const params: Record<string, string> = {
+      apiKey: API_KEY,
+      commerceOrder,
+      subject: `Rifa Consuelo - ${cantidad} numero${cantidad > 1 ? "s" : ""}`,
+      currency: "CLP",
+      amount: String(precio),
+      email,
+      urlConfirmation: `${process.env.NEXT_PUBLIC_URL}/api/webhook`,
+      urlReturn: `${process.env.NEXT_PUBLIC_URL}/gracias`,
+    };
 
-  params.s = signParams(params);
+    params.s = signParams(params);
 
-  const body = new URLSearchParams(params);
+    const body = new URLSearchParams(params);
 
-  const res = await fetch(`${FLOW_API_URL}/payment/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
+    console.log("Enviando a Flow:", Object.fromEntries(body));
 
-  const data = await res.json();
+    const res = await fetch(`${FLOW_API_URL}/payment/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
 
-  if (!data.url || !data.token) {
-    return NextResponse.json({ error: "Error al crear pago" }, { status: 500 });
+    const data = await res.json();
+
+    console.log("Flow response:", JSON.stringify(data));
+
+    if (!data.url || !data.token) {
+      return NextResponse.json(
+        { error: "Error al crear pago", detail: data },
+        { status: 500 }
+      );
+    }
+
+    await supabase.from("compras").insert({
+      preference_id: commerceOrder,
+      nombre,
+      email,
+      telefono,
+      cantidad,
+      estado: "pendiente",
+    });
+
+    return NextResponse.json({ url: `${data.url}?token=${data.token}` });
+  } catch (err) {
+    console.error("Error crear-preferencia:", err);
+    return NextResponse.json(
+      { error: "Error interno", detail: String(err) },
+      { status: 500 }
+    );
   }
-
-  // Guardar compra pendiente
-  await supabase.from("compras").insert({
-    preference_id: commerceOrder,
-    nombre,
-    email,
-    telefono,
-    cantidad,
-    estado: "pendiente",
-  });
-
-  return NextResponse.json({ url: `${data.url}?token=${data.token}` });
-  console.log("Flow response:", data);
 }
