@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rfifa Consuelo",
+  title: "Rifa Consuelo",
   description: "Rifa solidaria para apoyar los gastos médicos de Consuelo.",
 };
 
