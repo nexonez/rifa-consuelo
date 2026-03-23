@@ -44,7 +44,7 @@ async function procesarCompra(compra: any, token: string) {
     .join(", ");
 
   await resend.emails.send({
-    from: "Rifa Consuelo <onboarding@resend.dev>",
+    from: "Rifa Consuelo <rifa@latidosparaconsuelo.cl>",
     to: compra.email,
     subject: "¡Tus números de la rifa!",
     html: `
