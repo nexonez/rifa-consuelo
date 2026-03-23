@@ -12,6 +12,7 @@ export default function HomePage() {
   const [numerosVendidos, setNumerosVendidos] = useState<number[]>([]);
 
   const numeros = Array.from({ length: 500 }, (_, i) => i + 1);
+  const porcentaje = Math.round((numerosVendidos.length / 500) * 100);
 
   useEffect(() => {
     supabase
@@ -50,17 +51,46 @@ export default function HomePage() {
 
       {/* Hero */}
       <section className="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-14">
-        <div className="text-center max-w-3xl mx-auto">
-          <span className="inline-block bg-rose-100 text-rose-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
-            Rifa solidaria por Consuelo
-          </span>
-          <h1 className="text-3xl md:text-6xl font-bold leading-tight">
-            Ayúdanos con los gastos de <span className="text-rose-600">Consuelo</span>
-          </h1>
-          <p className="mt-5 text-base md:text-lg text-slate-600 leading-relaxed">
-            Estamos realizando una rifa solidaria para apoyar los gastos médicos de nuestra hija.
-            Cada aporte es una ayuda real para nuestra familia.
-          </p>
+        <div className="flex flex-col md:flex-row items-center gap-8 max-w-4xl mx-auto">
+          <div className="flex-shrink-0">
+            <img
+              src="/consu.jpg"
+              alt="Consuelo"
+              className="w-48 h-48 md:w-64 md:h-64 rounded-full object-cover border-4 border-rose-200 shadow-lg"
+            />
+          </div>
+          <div className="text-center md:text-left">
+            <span className="inline-block bg-rose-100 text-rose-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
+              Rifa solidaria por Consuelo
+            </span>
+            <h1 className="text-3xl md:text-5xl font-bold leading-tight">
+              Ayúdanos con los gastos de <span className="text-rose-600">Consuelo</span>
+            </h1>
+            <p className="mt-4 text-base md:text-lg text-slate-600 leading-relaxed">
+              Estamos realizando una rifa solidaria para apoyar los gastos médicos de nuestra hija.
+              Cada aporte es una ayuda real para nuestra familia.
+            </p>
+            <div className="mt-5 inline-block bg-rose-600 text-white px-6 py-3 rounded-full font-bold text-lg">
+              🗓️ Sorteo: 30 de Abril 2026
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Barra de progreso */}
+      <section className="max-w-4xl mx-auto px-4 md:px-6 py-4">
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
+          <div className="flex justify-between items-center mb-3">
+            <span className="font-bold text-slate-700">Números vendidos</span>
+            <span className="font-bold text-rose-600">{numerosVendidos.length} de 500</span>
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-4">
+            <div
+              className="bg-rose-500 h-4 rounded-full transition-all duration-500"
+              style={{ width: `${porcentaje}%` }}
+            />
+          </div>
+          <p className="text-sm text-slate-500 mt-2 text-right">{porcentaje}% vendido</p>
         </div>
       </section>
 
