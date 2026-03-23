@@ -9,6 +9,7 @@ function GraciasContent() {
   const token = searchParams.get("token");
   const [numeros, setNumeros] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
+  const [countdown, setCountdown] = useState(10);
 
   useEffect(() => {
     if (!token) {
@@ -17,7 +18,6 @@ function GraciasContent() {
     }
 
     const buscar = async () => {
-      // Buscar la compra por payment_id (token de Flow)
       for (let i = 0; i < 15; i++) {
         const { data } = await supabase
           .from("compras")
@@ -37,6 +37,22 @@ function GraciasContent() {
 
     buscar();
   }, [token]);
+
+  useEffect(() => {
+    if (numeros.length > 0) {
+      const interval = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            window.location.href = "/";
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [numeros]);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-rose-50 to-white flex items-center justify-center px-4">
@@ -59,7 +75,15 @@ function GraciasContent() {
                 </span>
               ))}
             </div>
-            <p className="text-slate-500 text-sm">También te los enviamos a tu correo. ¡Mucha suerte! 🍀</p>
+            <p className="text-slate-500 text-sm mb-6">También te los enviamos a tu correo. ¡Mucha suerte! 🍀</p>
+            <button
+              onClick={() => window.location.href = "/"}
+              className="w-full px-8 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-bold text-lg transition">
+              Volver al inicio
+            </button>
+            <p className="text-slate-400 text-sm mt-3">
+              Redirigiendo automáticamente en {countdown} segundos...
+            </p>
           </>
         ) : (
           <>
