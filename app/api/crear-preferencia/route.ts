@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
       subject: `Rifa Consuelo - ${cantidad} numero${cantidad > 1 ? "s" : ""}`,
       amount: String(precio),
       email,
-      urlConfirmation: `${process.env.NEXT_PUBLIC_URL}/api/retorno`,
+      urlConfirmation: `${process.env.NEXT_PUBLIC_URL}/api/webhook`,
       urlReturn: `${process.env.NEXT_PUBLIC_URL}/api/retorno`,
     };
 
