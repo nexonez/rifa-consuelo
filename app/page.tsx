@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 export default function HomePage() {
@@ -9,13 +9,11 @@ export default function HomePage() {
   const [email, setEmail] = useState("");
   const [cantidad, setCantidad] = useState<1 | 3 | null>(null);
   const [loading, setLoading] = useState(false);
-
-  
-  const numeros = Array.from({ length: 500 }, (_, i) => i + 1);
   const [numerosVendidos, setNumerosVendidos] = useState<number[]>([]);
 
-  // Cargar números vendidos
-  useState(() => {
+  const numeros = Array.from({ length: 500 }, (_, i) => i + 1);
+
+  useEffect(() => {
     supabase
       .from("numeros")
       .select("id, vendido")
@@ -23,7 +21,7 @@ export default function HomePage() {
       .then(({ data }) => {
         if (data) setNumerosVendidos(data.map((n) => n.id));
       });
-  });
+  }, []);
 
   const handleComprar = async () => {
     if (!nombre.trim()) { alert("Ingresa tu nombre."); return; }
@@ -49,6 +47,8 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-rose-50 via-white to-sky-50 text-slate-800">
+
+      {/* Hero */}
       <section className="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-14">
         <div className="text-center max-w-3xl mx-auto">
           <span className="inline-block bg-rose-100 text-rose-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
@@ -64,6 +64,44 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Premios */}
+      <section className="max-w-4xl mx-auto px-4 md:px-6 py-8">
+        <h2 className="text-2xl md:text-3xl font-bold text-center mb-8">🎁 Premios</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          <div className="bg-white rounded-3xl border-2 border-yellow-400 shadow-sm p-6 text-center">
+            <div className="text-4xl mb-3">🥇</div>
+            <div className="text-lg font-bold text-yellow-600 mb-2">1er Premio</div>
+            <img
+              src="https://http2.mlstatic.com/D_NQ_NP_894961-MLC77741329634_072024-O.webp"
+              alt="DJI Mini 3"
+              className="w-full h-40 object-contain mb-3"
+            />
+            <div className="font-bold text-slate-800">DJI Mini 3</div>
+            <div className="text-sm text-slate-500">Fly More Combo (DJI RC)</div>
+            <div className="text-rose-600 font-bold text-lg mt-2">$550.900</div>
+          </div>
+
+          <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm p-6 text-center">
+            <div className="text-4xl mb-3">🥈</div>
+            <div className="text-lg font-bold text-slate-600 mb-2">2do Premio</div>
+            <div className="text-6xl my-8">💵</div>
+            <div className="font-bold text-slate-800 text-xl">$100.000</div>
+            <div className="text-sm text-slate-500 mt-1">En efectivo</div>
+          </div>
+
+          <div className="bg-white rounded-3xl border-2 border-amber-700 shadow-sm p-6 text-center">
+            <div className="text-4xl mb-3">🥉</div>
+            <div className="text-lg font-bold text-amber-700 mb-2">3er Premio</div>
+            <div className="text-6xl my-8">💵</div>
+            <div className="font-bold text-slate-800 text-xl">$50.000</div>
+            <div className="text-sm text-slate-500 mt-1">En efectivo</div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* Formulario */}
       <section className="max-w-4xl mx-auto px-4 md:px-6 py-6 md:py-10">
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-5 md:p-8">
           <h2 className="text-2xl md:text-3xl font-bold mb-6 text-center">Compra tu número</h2>
@@ -121,11 +159,12 @@ export default function HomePage() {
           <button type="button" onClick={handleComprar} disabled={loading}
             className="w-full mt-2 px-8 py-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-2xl font-bold text-lg transition disabled:opacity-60">
             {loading ? "Procesando..." : cantidad === 1 ? "Pagar $2.000 con Flow"
-  : cantidad === 3 ? "Pagar $5.000 con Flow" : "Pagar con Flow"}
+              : cantidad === 3 ? "Pagar $5.000 con Flow" : "Pagar con Flow"}
           </button>
         </div>
       </section>
 
+      {/* Listado números */}
       <section className="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-12">
         <div className="flex items-center justify-between gap-4 mb-4">
           <h2 className="text-2xl font-bold">Números de la rifa</h2>
@@ -134,7 +173,6 @@ export default function HomePage() {
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-slate-300 inline-block"></span> Vendido</span>
           </div>
         </div>
-
         <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 gap-2">
           {numeros.map((n) => {
             const vendido = numerosVendidos.includes(n);
@@ -151,6 +189,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Footer */}
       <section className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
         <div className="bg-slate-900 text-white p-6 rounded-3xl text-center">
           <p className="leading-relaxed">
@@ -159,6 +198,7 @@ export default function HomePage() {
           </p>
         </div>
       </section>
+
     </main>
   );
 }
