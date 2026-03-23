@@ -33,8 +33,6 @@ export async function POST(req: NextRequest) {
 
     const body = new URLSearchParams(params);
 
-    console.log("Enviando a Flow:", Object.fromEntries(body));
-
     const res = await fetch(`${FLOW_API_URL}/payment/create`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -52,6 +50,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Guardar compra con el token de Flow
     await supabase.from("compras").insert({
       preference_id: commerceOrder,
       nombre,
@@ -59,6 +58,7 @@ export async function POST(req: NextRequest) {
       telefono,
       cantidad,
       estado: "pendiente",
+      payment_id: data.token,
     });
 
     return NextResponse.json({ url: `${data.url}?token=${data.token}` });

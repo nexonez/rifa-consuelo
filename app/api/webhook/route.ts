@@ -1,60 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac } from "crypto";
 import { supabase } from "@/lib/supabase";
 import { Resend } from "resend";
 
-const FLOW_API_URL = "https://www.flow.cl/api";
-const API_KEY = process.env.FLOW_API_KEY!;
-const SECRET_KEY = process.env.FLOW_SECRET_KEY!;
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
-function signParams(params: Record<string, string>): string {
-  const keys = Object.keys(params).sort();
-  const toSign = keys.map((k) => k + params[k]).join("");
-  return createHmac("sha256", SECRET_KEY).update(toSign).digest("hex");
-}
-
-export async function POST(req: NextRequest) {
-  const body = await req.formData();
-  const token = body.get("token") as string;
-
-  console.log("Webhook token recibido:", token);
-  console.log("Webhook body completo:", Object.fromEntries(body));
-
-  if (!token) return NextResponse.json({ ok: true });
-
-  const params: Record<string, string> = { apiKey: API_KEY, token };
-  params.s = signParams(params);
-
-  const res = await fetch(`${FLOW_API_URL}/payment/getStatus`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(params).toString(),
-  });
-
-  const payment = await res.json();
-  console.log("Webhook payment status:", JSON.stringify(payment));
-
-  if (payment.status !== 2) return NextResponse.json({ ok: true });
-
-  const commerceOrder = payment.commerceOrder;
-
-  const { data: compraExistente } = await supabase
-    .from("compras")
-    .select("*")
-    .eq("preference_id", commerceOrder)
-    .eq("estado", "completado")
-    .single();
-
-  if (compraExistente) return NextResponse.json({ ok: true });
-
-  const { data: compra } = await supabase
-    .from("compras")
-    .select("*")
-    .eq("preference_id", commerceOrder)
-    .single();
-
-  if (!compra) return NextResponse.json({ ok: true });
+async function procesarCompra(compra: any, token: string) {
+  if (compra.estado === "completado") return NextResponse.json({ ok: true });
 
   const { data: numerosDisponibles } = await supabase
     .from("numeros")
@@ -66,7 +17,7 @@ export async function POST(req: NextRequest) {
   }
 
   const shuffled = numerosDisponibles.sort(() => Math.random() - 0.5);
-  const elegidos = shuffled.slice(0, compra.cantidad).map((n) => n.id);
+  const elegidos = shuffled.slice(0, compra.cantidad).map((n: any) => n.id);
 
   await supabase
     .from("numeros")
@@ -86,10 +37,10 @@ export async function POST(req: NextRequest) {
       payment_id: token,
       numeros_asignados: elegidos,
     })
-    .eq("preference_id", commerceOrder);
+    .eq("preference_id", compra.preference_id);
 
   const numerosFormateados = elegidos
-    .map((n) => String(n).padStart(3, "0"))
+    .map((n: number) => String(n).padStart(3, "0"))
     .join(", ");
 
   await resend.emails.send({
@@ -110,4 +61,37 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({ ok: true });
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.formData();
+  const token = body.get("token") as string;
+
+  console.log("Webhook token recibido:", token);
+
+  if (!token) return NextResponse.json({ ok: true });
+
+  // Buscar compra por token guardado al crear
+  const { data: compra } = await supabase
+    .from("compras")
+    .select("*")
+    .eq("payment_id", token)
+    .single();
+
+  if (compra) {
+    return await procesarCompra(compra, token);
+  }
+
+  // Si no encuentra por token, buscar la pendiente más reciente
+  const { data: compraPendiente } = await supabase
+    .from("compras")
+    .select("*")
+    .eq("estado", "pendiente")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (!compraPendiente) return NextResponse.json({ ok: true });
+
+  return await procesarCompra(compraPendiente, token);
 }
