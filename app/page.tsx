@@ -73,7 +73,7 @@ export default function HomePage() {
             <div className="text-4xl mb-3">🥇</div>
             <div className="text-lg font-bold text-yellow-600 mb-2">1er Premio</div>
             <img
-              src="https://http2.mlstatic.com/D_NQ_NP_894961-MLC77741329634_072024-O.webp"
+              src="/dji-mini3.jpg"
               alt="DJI Mini 3"
               className="w-full h-40 object-contain mb-3"
             />
