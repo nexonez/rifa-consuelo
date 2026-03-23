@@ -18,6 +18,9 @@ export async function POST(req: NextRequest) {
   const body = await req.formData();
   const token = body.get("token") as string;
 
+  console.log("Webhook token recibido:", token);
+  console.log("Webhook body completo:", Object.fromEntries(body));
+
   if (!token) return NextResponse.json({ ok: true });
 
   const params: Record<string, string> = { apiKey: API_KEY, token };
@@ -108,4 +111,3 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
-
