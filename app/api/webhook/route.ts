@@ -66,7 +66,6 @@ async function procesarCompra(compra: any, token: string) {
 async function rechazarCompra(compra: any) {
   if (compra.estado === "rechazado") return NextResponse.json({ ok: true });
 
-  // Liberar números asignados
   if (compra.numeros_asignados?.length > 0) {
     await supabase
       .from("numeros")
@@ -80,13 +79,11 @@ async function rechazarCompra(compra: any) {
       .in("id", compra.numeros_asignados);
   }
 
-  // Marcar compra como rechazada
   await supabase
     .from("compras")
     .update({ estado: "rechazado" })
     .eq("preference_id", compra.preference_id);
 
-  // Notificar al usuario
   await resend.emails.send({
     from: "Rifa Consuelo <rifa@latidosparaconsuelo.cl>",
     to: compra.email,
@@ -110,10 +107,11 @@ export async function POST(req: NextRequest) {
   const token = body.get("token") as string;
 
   console.log("Webhook token recibido:", token);
+  console.log("Webhook body completo:", Object.fromEntries(body));
 
   if (!token) return NextResponse.json({ ok: true });
 
-  // Buscar compra por token guardado al crear
+  // Buscar compra por token
   const { data: compra } = await supabase
     .from("compras")
     .select("*")
@@ -121,19 +119,18 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (compra) {
-    // Si ya está completado verificar si viene rechazo
-    if (compra.estado === "completado") {
-      // Flow envía status en el body cuando hay rechazo
-      const status = body.get("status");
-      if (status === "3") {
-        return await rechazarCompra(compra);
-      }
-      return NextResponse.json({ ok: true });
+    const status = body.get("status");
+    console.log("Status recibido:", status);
+
+    if (status === "3") {
+      return await rechazarCompra(compra);
     }
+
+    if (compra.estado === "completado") return NextResponse.json({ ok: true });
     return await procesarCompra(compra, token);
   }
 
-  // Si no encuentra por token, buscar la pendiente más reciente
+  // Buscar compra pendiente más reciente
   const { data: compraPendiente } = await supabase
     .from("compras")
     .select("*")
@@ -144,8 +141,9 @@ export async function POST(req: NextRequest) {
 
   if (!compraPendiente) return NextResponse.json({ ok: true });
 
-  // Verificar si es rechazo
   const status = body.get("status");
+  console.log("Status recibido (pendiente):", status);
+
   if (status === "3") {
     return await rechazarCompra(compraPendiente);
   }
