@@ -22,12 +22,10 @@ async function consultarPagoPorToken(token: string) {
 
   params.s = signParams(params);
 
-  const res = await fetch(`${FLOW_API_URL}/payment/getStatus`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams(params).toString(),
+  const queryString = new URLSearchParams(params).toString();
+
+  const res = await fetch(`${FLOW_API_URL}/payment/getStatus?${queryString}`, {
+    method: "GET",
   });
 
   return res.json();
