@@ -9,6 +9,7 @@ function GraciasContent() {
   const token = searchParams.get("token");
   const [numeros, setNumeros] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rechazado, setRechazado] = useState(false);
   const [countdown, setCountdown] = useState(10);
 
   useEffect(() => {
@@ -18,7 +19,8 @@ function GraciasContent() {
     }
 
     const buscar = async () => {
-      for (let i = 0; i < 15; i++) {
+      // Esperar hasta 3 minutos consultando cada 5 segundos
+      for (let i = 0; i < 36; i++) {
         const { data } = await supabase
           .from("compras")
           .select("numeros_asignados, estado")
@@ -30,7 +32,14 @@ function GraciasContent() {
           setLoading(false);
           return;
         }
-        await new Promise((r) => setTimeout(r, 2000));
+
+        if (data?.estado === "rechazado") {
+          setRechazado(true);
+          setLoading(false);
+          return;
+        }
+
+        await new Promise((r) => setTimeout(r, 5000));
       }
       setLoading(false);
     };
@@ -60,8 +69,22 @@ function GraciasContent() {
         {loading ? (
           <>
             <div className="text-4xl mb-4">⏳</div>
-            <h1 className="text-2xl font-bold mb-2">Confirmando tu pago...</h1>
-            <p className="text-slate-500">Estamos asignando tus números, espera un momento.</p>
+            <h1 className="text-2xl font-bold mb-2">Verificando tu pago...</h1>
+            <p className="text-slate-500">Estamos confirmando tu pago con Flow. Esto puede tomar hasta 1 minuto.</p>
+            <div className="mt-4 flex justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-600"></div>
+            </div>
+          </>
+        ) : rechazado ? (
+          <>
+            <div className="text-4xl mb-4">😔</div>
+            <h1 className="text-2xl font-bold mb-2 text-slate-600">Pago no procesado</h1>
+            <p className="text-slate-500 mb-6">Tu pago no pudo ser confirmado. No se realizó ningún cobro y tus números han sido liberados.</p>
+            <button
+              onClick={() => window.location.href = "/"}
+              className="w-full px-8 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-bold text-lg transition">
+              Volver a intentar
+            </button>
           </>
         ) : numeros.length > 0 ? (
           <>
