@@ -50,16 +50,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Guardar compra con el token de Flow
-    await supabase.from("compras").insert({
+    const { error: insertError } = await supabase.from("compras").insert({
       preference_id: commerceOrder,
+      payment_id: data.token,
       nombre,
       email,
       telefono,
       cantidad,
       estado: "pendiente",
-      payment_id: data.token,
     });
+
+    if (insertError) {
+      console.error("Error guardando compra:", insertError);
+      return NextResponse.json(
+        { error: "Error guardando compra", detail: insertError.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ url: `${data.url}?token=${data.token}` });
   } catch (err) {
