@@ -1,8 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHmac } from "crypto";
 import { supabase } from "@/lib/supabase";
 import { Resend } from "resend";
 
+const FLOW_API_URL = "https://www.flow.cl/api";
+const API_KEY = process.env.FLOW_API_KEY!;
+const SECRET_KEY = process.env.FLOW_SECRET_KEY!;
 const resend = new Resend(process.env.RESEND_API_KEY!);
+
+function signParams(params: Record<string, string>): string {
+  const keys = Object.keys(params).sort();
+  const toSign = keys.map((k) => k + params[k]).join("");
+  return createHmac("sha256", SECRET_KEY).update(toSign).digest("hex");
+}
+
+async function getPaymentStatus(token: string) {
+  const params: Record<string, string> = { apiKey: API_KEY, token };
+  params.s = signParams(params);
+
+  const res = await fetch(`${FLOW_API_URL}/payment/getStatus`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(params).toString(),
+  });
+
+  return await res.json();
+}
 
 async function procesarCompra(compra: any, token: string) {
   if (compra.estado === "completado") return NextResponse.json({ ok: true });
@@ -92,7 +115,7 @@ async function rechazarCompra(compra: any) {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #64748b;">Hola ${compra.nombre}</h1>
         <p>Lamentablemente tu pago no fue procesado correctamente y tus números han sido liberados.</p>
-        <p>Si deseas participar en la rifa puedes intentarlo nuevamente en <a href="https://rifa.latidosparaconsuelo.cl">rifa.latidosparaconsuelo.cl</a></p>
+        <p>Si deseas participar puedes intentarlo nuevamente en <a href="https://rifa.latidosparaconsuelo.cl">rifa.latidosparaconsuelo.cl</a></p>
         <p style="color: #64748b; font-size: 14px;">Si tienes dudas contáctanos respondiendo este correo.</p>
       </div>
     `,
@@ -107,46 +130,60 @@ export async function POST(req: NextRequest) {
   const token = body.get("token") as string;
 
   console.log("Webhook token recibido:", token);
-  console.log("Webhook body completo:", Object.fromEntries(body));
 
   if (!token) return NextResponse.json({ ok: true });
 
-  // Buscar compra por token
-  const { data: compra } = await supabase
+  // Consultar estado real del pago en Flow
+  const payment = await getPaymentStatus(token);
+  console.log("Flow payment status:", JSON.stringify(payment));
+
+  // Buscar compra por token o por commerceOrder
+  let compra = null;
+
+  const { data: compraPorToken } = await supabase
     .from("compras")
     .select("*")
     .eq("payment_id", token)
     .single();
 
-  if (compra) {
-    const status = body.get("status");
-    console.log("Status recibido:", status);
+  if (compraPorToken) {
+    compra = compraPorToken;
+  } else if (payment.commerceOrder) {
+    const { data: compraPorOrder } = await supabase
+      .from("compras")
+      .select("*")
+      .eq("preference_id", payment.commerceOrder)
+      .single();
+    compra = compraPorOrder;
+  }
 
-    if (status === "3") {
+  if (!compra) {
+    // Último fallback: compra pendiente más reciente
+    const { data: compraPendiente } = await supabase
+      .from("compras")
+      .select("*")
+      .eq("estado", "pendiente")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    compra = compraPendiente;
+  }
+
+  if (!compra) return NextResponse.json({ ok: true });
+
+  // Si getStatus funcionó, usar el status real
+  if (payment.status !== undefined && payment.code !== 105) {
+    if (payment.status === 2) {
+      return await procesarCompra(compra, token);
+    } else {
       return await rechazarCompra(compra);
     }
-
-    if (compra.estado === "completado") return NextResponse.json({ ok: true });
-    return await procesarCompra(compra, token);
   }
 
-  // Buscar compra pendiente más reciente
-  const { data: compraPendiente } = await supabase
-    .from("compras")
-    .select("*")
-    .eq("estado", "pendiente")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (!compraPendiente) return NextResponse.json({ ok: true });
-
-  const status = body.get("status");
-  console.log("Status recibido (pendiente):", status);
-
-  if (status === "3") {
-    return await rechazarCompra(compraPendiente);
+  // Si getStatus falló (105), procesar igual como antes
+  if (compra.estado === "completado" || compra.estado === "rechazado") {
+    return NextResponse.json({ ok: true });
   }
 
-  return await procesarCompra(compraPendiente, token);
+  return await procesarCompra(compra, token);
 }
