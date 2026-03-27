@@ -63,6 +63,48 @@ async function procesarCompra(compra: any, token: string) {
   return NextResponse.json({ ok: true });
 }
 
+async function rechazarCompra(compra: any) {
+  if (compra.estado === "rechazado") return NextResponse.json({ ok: true });
+
+  // Liberar números asignados
+  if (compra.numeros_asignados?.length > 0) {
+    await supabase
+      .from("numeros")
+      .update({
+        vendido: false,
+        comprador_nombre: null,
+        comprador_email: null,
+        comprador_telefono: null,
+        fecha_compra: null,
+      })
+      .in("id", compra.numeros_asignados);
+  }
+
+  // Marcar compra como rechazada
+  await supabase
+    .from("compras")
+    .update({ estado: "rechazado" })
+    .eq("preference_id", compra.preference_id);
+
+  // Notificar al usuario
+  await resend.emails.send({
+    from: "Rifa Consuelo <rifa@latidosparaconsuelo.cl>",
+    to: compra.email,
+    subject: "Tu pago no fue procesado",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #64748b;">Hola ${compra.nombre}</h1>
+        <p>Lamentablemente tu pago no fue procesado correctamente y tus números han sido liberados.</p>
+        <p>Si deseas participar en la rifa puedes intentarlo nuevamente en <a href="https://rifa.latidosparaconsuelo.cl">rifa.latidosparaconsuelo.cl</a></p>
+        <p style="color: #64748b; font-size: 14px;">Si tienes dudas contáctanos respondiendo este correo.</p>
+      </div>
+    `,
+  });
+
+  console.log("Compra rechazada y números liberados:", compra.preference_id);
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.formData();
   const token = body.get("token") as string;
@@ -79,6 +121,15 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (compra) {
+    // Si ya está completado verificar si viene rechazo
+    if (compra.estado === "completado") {
+      // Flow envía status en el body cuando hay rechazo
+      const status = body.get("status");
+      if (status === "3") {
+        return await rechazarCompra(compra);
+      }
+      return NextResponse.json({ ok: true });
+    }
     return await procesarCompra(compra, token);
   }
 
@@ -92,6 +143,12 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (!compraPendiente) return NextResponse.json({ ok: true });
+
+  // Verificar si es rechazo
+  const status = body.get("status");
+  if (status === "3") {
+    return await rechazarCompra(compraPendiente);
+  }
 
   return await procesarCompra(compraPendiente, token);
 }
