@@ -14,17 +14,33 @@ function signParams(params: Record<string, string>): string {
   return createHmac("sha256", SECRET_KEY).update(toSign).digest("hex");
 }
 
-export async function GET(req: NextRequest) {
-  // Validación para cron-job.org usando query param:
-  // https://tu-dominio.cl/api/cron-verifica?token=TU_CRON_SECRET
-  const token = req.nextUrl.searchParams.get("token");
+async function consultarPagoPorToken(token: string) {
+  const params: Record<string, string> = {
+    apiKey: API_KEY,
+    token,
+  };
 
-  if (!token || token !== process.env.CRON_SECRET) {
+  params.s = signParams(params);
+
+  const res = await fetch(`${FLOW_API_URL}/payment/getStatus`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams(params).toString(),
+  });
+
+  return res.json();
+}
+
+export async function GET(req: NextRequest) {
+  const cronToken = req.nextUrl.searchParams.get("token");
+
+  if (!cronToken || cronToken !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    // Obtener compras en estado "procesando" de los últimos 30 minutos
     const hace30min = new Date(Date.now() - 30 * 60 * 1000).toISOString();
 
     const { data: compras, error: comprasError } = await supabase
@@ -47,36 +63,31 @@ export async function GET(req: NextRequest) {
 
     console.log(`Cron: verificando ${compras.length} compras pendientes`);
 
+    let procesadas = 0;
+
     for (const compra of compras) {
       try {
-        const params: Record<string, string> = {
-          apiKey: API_KEY,
-          commerceId: compra.preference_id,
-        };
+        if (!compra.payment_id) {
+          console.warn(`Compra sin payment_id: ${compra.preference_id}`);
+          continue;
+        }
 
-        params.s = signParams(params);
+        const payment = await consultarPagoPorToken(compra.payment_id);
 
-        const res = await fetch(`${FLOW_API_URL}/payment/getStatusByCommerceId`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams(params).toString(),
-        });
-
-        const payment = await res.json();
         console.log(
           `Cron status ${compra.preference_id}:`,
           JSON.stringify(payment)
         );
 
-        if (payment.code === 105) {
-          console.log("getStatusByCommerceId también da 105, saltando...");
+        if (payment.code && payment.code !== 0) {
+          console.warn(
+            `Flow devolvió error para ${compra.preference_id}:`,
+            JSON.stringify(payment)
+          );
           continue;
         }
 
         if (payment.status === 2) {
-          // Pago aprobado — asignar números
           const { data: numerosDisponibles, error: numerosError } = await supabase
             .from("numeros")
             .select("id")
@@ -127,27 +138,34 @@ export async function GET(req: NextRequest) {
           }
 
           const numerosFormateados = elegidos
-            .map((n) => String(n).padStart(3, "0"))
+            .map((n: number) => String(n).padStart(3, "0"))
             .join(", ");
 
-          await resend.emails.send({
-            from: "Rifa Consuelo <rifa@latidosparaconsuelo.cl>",
-            to: compra.email,
-            subject: "¡Tus números de la rifa!",
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h1 style="color: #e11d48;">¡Gracias por tu apoyo, ${compra.nombre}! 💕</h1>
-                <p>Tu pago fue confirmado. Estos son tus números de la rifa:</p>
-                <div style="background: #fff1f2; border: 2px solid #e11d48; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
-                  <p style="font-size: 32px; font-weight: bold; color: #e11d48; margin: 0;">${numerosFormateados}</p>
+          try {
+            await resend.emails.send({
+              from: "Rifa Consuelo <rifa@latidosparaconsuelo.cl>",
+              to: compra.email,
+              subject: "¡Tus números de la rifa!",
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                  <h1 style="color: #e11d48;">¡Gracias por tu apoyo, ${compra.nombre}! 💕</h1>
+                  <p>Tu pago fue confirmado. Estos son tus números de la rifa:</p>
+                  <div style="background: #fff1f2; border: 2px solid #e11d48; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
+                    <p style="font-size: 32px; font-weight: bold; color: #e11d48; margin: 0;">${numerosFormateados}</p>
+                  </div>
+                  <p>Guarda este correo como comprobante. ¡Mucha suerte!</p>
+                  <p style="color: #64748b; font-size: 14px;">Esta rifa es solidaria para apoyar los gastos médicos de Consuelo. Gracias por tu generosidad.</p>
                 </div>
-                <p>Guarda este correo como comprobante. ¡Mucha suerte!</p>
-                <p style="color: #64748b; font-size: 14px;">Esta rifa es solidaria para apoyar los gastos médicos de Consuelo. Gracias por tu generosidad.</p>
-              </div>
-            `,
-          });
+              `,
+            });
+          } catch (emailError) {
+            console.error("Error enviando correo:", emailError);
+          }
+
+          procesadas++;
+        } else if (payment.status === 1) {
+          console.log(`Pago aún pendiente para ${compra.preference_id}`);
         } else {
-          // Pago no aprobado — liberar números si los tiene
           if (compra.numeros_asignados?.length > 0) {
             const { error: liberarNumerosError } = await supabase
               .from("numeros")
@@ -174,26 +192,13 @@ export async function GET(req: NextRequest) {
             console.error("Error marcando compra como rechazada:", rechazarCompraError);
             continue;
           }
-
-          await resend.emails.send({
-            from: "Rifa Consuelo <rifa@latidosparaconsuelo.cl>",
-            to: compra.email,
-            subject: "Tu pago no fue procesado",
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h1 style="color: #64748b;">Hola ${compra.nombre}</h1>
-                <p>Lamentablemente tu pago no fue procesado y tus números han sido liberados.</p>
-                <p>Puedes intentarlo nuevamente en <a href="https://rifa.latidosparaconsuelo.cl">rifa.latidosparaconsuelo.cl</a></p>
-              </div>
-            `,
-          });
         }
       } catch (error) {
         console.error(`Error procesando compra ${compra.preference_id}:`, error);
       }
     }
 
-    return NextResponse.json({ ok: true, procesadas: compras.length });
+    return NextResponse.json({ ok: true, procesadas });
   } catch (error) {
     console.error("Error general del cron:", error);
     return NextResponse.json(
